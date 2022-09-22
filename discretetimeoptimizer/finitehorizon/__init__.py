@@ -13,15 +13,15 @@ from datetime import datetime as dt
 class finitehorizon_optimizer :
     #Import all method submodules
     #They should all be named _fds_*
-    from _fds_initialize import _init_fds,addParam,getParam, \
+    from ._fds_initialize import _init_fds,addParam,getParam, \
         updateExogenousValues,addExogenous,setDiscountFactor,setT, \
         addControl,addState, initialize, stateV2I, stateI2V, controlV2I, controlI2V, \
         _initState, _initControl, _initExogeneous, _initValueFunction
 
-    from _fds_solver import solve, _findAllOptimalControls, getOptimalPath
-    from _fds_constraint_mask import get_constraint_mask
-    from _fds_payoff import payoff
-    from _fds_state_transition import state_transition
+    from ._fds_solver import solve, _findAllOptimalControls, get_optimal_path
+    from ._fds_constraint_mask import get_constraint_mask
+    from ._fds_payoff import payoff
+    from ._fds_state_transition import state_transition
 
     #Define data types. Chaning these may have performance implications
     #On some systems. I've selected them for maximum compatibility and flexibility
@@ -62,5 +62,5 @@ if __name__ == "__main__" :
     end_time = dt.now()
     print("Elapsed Time:",end_time - start_time)
 
-    x = fds.getOptimalPath(1)
+    x = fds.get_optimal_path(1)
     print(x)

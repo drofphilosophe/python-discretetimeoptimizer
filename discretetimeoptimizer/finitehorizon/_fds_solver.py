@@ -23,11 +23,6 @@ def _findAllOptimalControls(self,t) :
     #Compute state transitions
     self.state_transition(t)
 
-    #Compute the value function in this time period
-    #This is profit plus the discount factor times the value function for the new state
-    #sidx_new = numpy.unravel_index(self.state_transition_idx,shape=self.stateShape)
-    #sidx_new = tuple(list(sidx_new) + [numpy.full_like(self.state_transition,fill_value=t+1,dtype=numpy.int64)])
-
     #Compute candidate values of the period t value function for each combination of state and control
     #This is the current period payoff plus the discounted t+1 value function for the new state
     self.vfc = self.profit_array + self.discount * self.VF[self.state_transition_idx,t+1]
@@ -60,7 +55,7 @@ def solve(self) :
 
 #After solving everything you have value functions and the optimal control
 #But maybe you want to extract the optimal path over time given an inital state.
-def getOptimalPath(self,sval_init) :
+def get_optimal_path(self,sval_init) :
     """Compute the optimal path given an inital state
     :param numpy.array sval_init: An array of initial state values
     :returns: A pandas data frame outlining the optimal path
