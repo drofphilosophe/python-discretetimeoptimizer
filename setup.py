@@ -5,23 +5,21 @@ from Cython.Build import build_ext
 import numpy
 import pandas
 import datetime
+import os
 
-ext_modules = [
-    Extension(
-        "discretetimeoptimizer",
-        ["discretetimeoptimizer/finitehorizon/__init__.py",
-            "discretetimeoptimizer/finitehorizon/fds_constraint_mask.py",
-            "discretetimeoptimizer/finitehorizon/fds_initialize.py",
-            "discretetimeoptimizer/finitehorizon/fds_payoff.py",
-            "discretetimeoptimizer/finitehorizon/fds_solver.py",
-            "discretetimeoptimizer/finitehorizon/fds_state_transition.py"
-            ],
-            define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
-        )
-    ]
+ext_modules_finitehorizon_optimizer = Extension(
+    "finitehorizon.finitehorizon_optimizer",
+    ["discretetimeoptimizer/finitehorizon/finitehorizon_optimizer.py"],
+    define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
+    )
+
+ext_modules_finitehorizon = Extension("finitehorizon",["discretetimeoptimizer/finitehorizon/__init__.py"])
 
 setup(
     name = 'discretetimeoptimizer',
-    ext_modules = cythonize(ext_modules),
-    include_dirs=[numpy.get_include()]
+    ext_package="discretetimeoptimizer",
+    ext_modules = cythonize([ext_modules_finitehorizon_optimizer],force=True),
+    py_modules = ['discretetimeoptimizer/finitehorizon/__init__.py'],
+    include_dirs=[numpy.get_include()],
+    packages=["discretetimeoptimizer","discretetimeoptimizer.finitehorizon"]
 )
