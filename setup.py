@@ -8,8 +8,8 @@ import datetime
 import os
 
 ext_modules_finitehorizon_optimizer = Extension(
-    "finitehorizon.finitehorizon_optimizer",
-    ["discretetimeoptimizer/finitehorizon/finitehorizon_optimizer.py"],
+    "finitehorizon.optimizer",
+    ["discretetimeoptimizer/finitehorizon/optimizer.py"],
     define_macros=[("NPY_NO_DEPRECATED_API", "NPY_1_7_API_VERSION")]
     )
 

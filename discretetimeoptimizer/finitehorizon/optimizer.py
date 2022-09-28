@@ -1,17 +1,15 @@
 ###########################
-## FiniteDynamicSolver/__init__.py
+## FiniteDynamicSolver/optimizer.py
 ##
-## The header file for this class. It
-## imports all of the method submodules
-## and outlines class methods.
+## Implement a discrete time optimizer.
 ##
 ############################
-import cython
+#import cython
 import numpy
 import pandas
 from datetime import datetime as dt
 
-class finitehorizon_optimizer :
+class optimizer :
 
     #Define data types. Chaning these may have performance implications
     #On some systems. I've selected them for maximum compatibility and flexibility

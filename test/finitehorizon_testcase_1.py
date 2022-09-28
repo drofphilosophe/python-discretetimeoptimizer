@@ -3,10 +3,9 @@ import os
 import numpy
 import datetime
 sys.path.append(os.path.join(".."))
-import discretetimeoptimizer.finitehorizon.finitehorizon_optimizer
+import discretetimeoptimizer.finitehorizon.optimizer
 
-print(discretetimeoptimizer.finitehorizon.finitehorizon_optimizer.__file__)
-fds = discretetimeoptimizer.finitehorizon.finitehorizon_optimizer()
+fds = discretetimeoptimizer.finitehorizon.optimizer()
 
 fds.addParam("gamma",1)  #Per-period losses to stored electricity
 fds.addParam("e",0.8)    #Round-trip charging efficiency
