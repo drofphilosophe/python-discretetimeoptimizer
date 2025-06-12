@@ -5,17 +5,18 @@
 ##
 ############################
 #import cython
-import numpy
+import numpy as np
 import pandas
 from datetime import datetime as dt
+import jax.numpy as jnp
 
 class optimizer :
 
     #Define data types. Chaning these may have performance implications
     #On some systems. I've selected them for maximum compatibility and flexibility
-    D_FLOAT = numpy.float64
-    D_INT = numpy.uint64
-    D_BOOL = numpy.bool_
+    D_FLOAT = jnp.float32
+    D_INT = jnp.uint32
+    D_BOOL = jnp.bool_
 
     #If you have static methods you should
     #declare them with
@@ -186,12 +187,12 @@ class optimizer :
         """Add a time-varying exogeneous variable
 
         :param str name: Name of the exogeneous variable
-        :param numpy.ndarray values: An object that can be cast as a 1-dimensional array of the variable in each time period
+        :param jnp.ndarray values: An object that can be cast as a 1-dimensional array of the variable in each time period
         :raises Exception: if the name is already defined as an exogeneous variable
-        :raises ValueError: if the values cannot be recast as a numeric 1-D numpy.ndarray of length T
+        :raises ValueError: if the values cannot be recast as a numeric 1-D jnp.ndarray of length T
         """
         if name not in self.eidx.keys() :
-            values = numpy.array(values,dtype=self.D_FLOAT).flatten()
+            values = jnp.array(values,dtype=self.D_FLOAT).flatten()
             if self.T is None :
                 self.setT(len(values))
             elif len(values) != self.T :
@@ -209,12 +210,12 @@ class optimizer :
         """Update the time series of an exogeneous value
 
         :param str name: Name of an existing exogeneous variable
-        :param numpy.ndarray: An object that can be cast as a 1-dimensional array of the values in each time period
+        :param jnp.ndarray: An object that can be cast as a 1-dimensional array of the values in each time period
         :raises Exception: if the name is not currently defined as an exogeneous variable
-        :raises ValueError: if the values cannot be recast as a numeric 1-D numpy.ndarray
+        :raises ValueError: if the values cannot be recast as a numeric 1-D jnp.ndarray
         """
         if name in self.eidx.keys() :
-            values = numpy.array(values,dtype=self.D_FLOAT).flatten()
+            values = jnp.array(values,dtype=self.D_FLOAT).flatten()
             if len(values) != self.T :
                 raise ValueError("Exogeneous value vector should have length equal to the number of time periods.")
 
@@ -267,22 +268,22 @@ class optimizer :
             #Only rebuild the state space if it's dirty
             if self.dirty_state == True :
                 #Define the "intercept" of the state transformer. It is the minimum vaulue of each state variable
-                self.SA = numpy.array(self.stateDetails['minValue']).astype(numpy.float64)
+                self.SA = jnp.array(self.stateDetails['minValue']).astype(self.D_FLOAT)
 
                 #Define the "slope" of each state transformer. It is the step size
-                self.SB = numpy.array(self.stateDetails['delta']).astype(numpy.float64)
+                self.SB = jnp.array(self.stateDetails['delta']).astype(self.D_FLOAT)
 
                 #Define an array with the maximum index of each state variable.
                 #We'll use this to keep state transitions on-grid
-                self.SGMaxIndex = numpy.array( self.stateDetails['numPoints'] ) - 1
+                self.SGMaxIndex = jnp.array( self.stateDetails['numPoints'] ).astype(self.D_INT) - 1
 
                 #Get a list containing the size of each dimension in the state space
-                self.stateShape = self.stateDetails['numPoints']
+                self.stateShape = jnp.array(self.stateDetails['numPoints'])
 
                 #Create a 1-D array of unraveled state indexes
-                self.stateIndexes = numpy.array(
-                    numpy.unravel_index(
-                        numpy.arange(0, numpy.prod(self.stateDetails['numPoints'])).reshape(-1,) ,
+                self.stateIndexes = jnp.array(
+                    jnp.unravel_index(
+                        jnp.arange(0, jnp.prod(self.stateShape)).reshape(-1,) ,
                         self.stateShape
                         ),
                     dtype=self.D_INT
@@ -298,7 +299,7 @@ class optimizer :
                 #We'll name the columns to make it easier to write functions that use these values
                 #THIS IS A DATAFRAME WHERE EACH ROW IS A STATE VALUE VECTOR
                 self.SFlatDF = pandas.DataFrame(
-                    data = self.SA[numpy.newaxis,:] + numpy.multiply(self.SB[numpy.newaxis,:],self.stateIndexes),
+                    data = self.SA[jnp.newaxis,:] + jnp.multiply(self.SB[jnp.newaxis,:],self.stateIndexes),
                     columns = self.stateDetails["name"]
                 )
 
@@ -310,41 +311,41 @@ class optimizer :
 
     #Take a vector of state indexes and return a vector of values
     #TODO: This should move to cython
-    def stateI2V(self,sidx,unflatten=False) -> numpy.ndarray :
+    def stateI2V(self,sidx,unflatten=False) -> jnp.ndarray :
         """Convert a vector of state indexes into a vector of state values
 
-        :param numpy.ndarray sidx: A 1-dimensional array of state indexes
+        :param jnp.ndarray sidx: A 1-dimensional array of state indexes
         :param boolean unflatten: If True unravel the scalar index, if False assume an array index
         :return: A 1-dimensional array of state values
-        :rval: numpy.ndarray
+        :rval: jnp.ndarray
         :raises IndexError: if a value in the state index is out of bounds in the state space
         """
         if unflatten :
-                sidx = numpy.unravel_index(sidx,self.stateShape)
+                sidx = jnp.unravel_index(sidx,self.stateShape)
 
-        return numpy.array(
-            self.SA[numpy.newaxis,:] + numpy.multiply(self.SB[numpy.newaxis,:],sidx),
+        return jnp.array(
+            self.SA[np.newaxis,:] + np.multiply(self.SB[jnp.newaxis,:],sidx),
             dtype=self.D_FLOAT
             ).reshape(-1,)
 
     #Take a vector of state values and return a vector of indexes
     #TODO: This should move to cython
-    def stateV2I(self,sval,flatten=True) -> numpy.ndarray :
+    def stateV2I(self,sval,flatten=True) -> jnp.ndarray :
         """Convert a vector of state values into a vector of state indexes
 
-        :param numpy.ndarray sval: A 1-dimensional array of state values
+        :param jnp.ndarray sval: A 1-dimensional array of state values
         :param boolean flatten: If true, ravel the index to a scalar, otherwise return an array of indexes
         :return: a 1-dimensional array of state indexes
-        :rval: numpy.ndarray (float)
+        :rval: jnp.ndarray (float)
         """
-        sidx = numpy.around(
-            numpy.divide(numpy.array(sval) - self.SA,self.SB.transpose() ).astype(self.D_INT)
+        sidx = jnp.around(
+            jnp.divide(jnp.array(sval) - self.SA,self.SB.transpose() ).astype(self.D_INT)
             )
         #It is possible members of S are off grid. Replace them with
         #0 or the maximum index
-        numpy.clip(sidx,0,self.SGMaxIndex,out=sidx)
+        sidx = jnp.clip(sidx,0,self.SGMaxIndex)
         if flatten :
-                sidx = numpy.ravel_multi_index(sidx, self.stateShape)
+                sidx = jnp.ravel_multi_index(sidx, self.stateShape)
         return sidx
 
 
@@ -367,18 +368,18 @@ class optimizer :
         if self.KC > 0 :
             #Only rebuild the control space if its dirty
             if self.dirty_control == True :
-                self.CA = numpy.array(self.controlDetails['minValue'],dtype=self.D_FLOAT)
-                self.CB = numpy.array(self.controlDetails['delta'],dtype=self.D_FLOAT)
+                self.CA = jnp.array(self.controlDetails['minValue'],dtype=self.D_FLOAT)
+                self.CB = jnp.array(self.controlDetails['delta'],dtype=self.D_FLOAT)
 
-                #Create a numpy array with the maximum index for each control
+                #Create a jnp array with the maximum index for each control
                 #We'll use this to be controls stay on-grid
-                self.CGMaxIndex = numpy.array( self.controlDetails['numPoints'], dtype=self.D_INT  ) - 1
-                self.controlShape = self.controlDetails['numPoints']
+                self.CGMaxIndex = jnp.array( self.controlDetails['numPoints'], dtype=self.D_INT  ) - 1
+                self.controlShape = jnp.array(self.controlDetails['numPoints'])
 
                 #Create a 1-D array of raveled control indexes
-                self.controlIndexes = numpy.array(
-                    numpy.unravel_index(
-                        numpy.arange(0, numpy.prod(self.controlDetails['numPoints'])).reshape(-1,) ,
+                self.controlIndexes = jnp.array(
+                    jnp.unravel_index(
+                        jnp.arange(0, jnp.prod(self.controlShape)).reshape(-1,) ,
                         self.controlShape
                         ),
                     dtype=self.D_INT
@@ -393,14 +394,14 @@ class optimizer :
                 #We'll name the columns to make it easier to write functions that use these values
                 #THIS IS A MATRIX WHERE EACH ROW IS A STATE VALUE VECTOR
                 self.CFlatDF = pandas.DataFrame(
-                    data = self.CA + numpy.dot(self.controlIndexes,self.CB),
+                    data = self.CA + jnp.dot(self.controlIndexes,self.CB),
                     columns = self.controlDetails["name"]
                 )
 
                 #Init an array to hold candidate values of the value function
                 #This is a KC dimensional tensor where array indexes are control indexes
                 #And the entries will be values of the value function for a given set of controls
-                self.vfc = numpy.empty(self.controlShape)
+                self.vfc = jnp.empty(self.controlShape)
 
                 self.dirty_control = False
         else :
@@ -408,18 +409,18 @@ class optimizer :
 
     #Take a vector of control indexes and return a vector of values
     #TODO: This should move to cython
-    def controlI2V(self,cidx,unflatten=False) -> numpy.ndarray:
+    def controlI2V(self,cidx,unflatten=False) -> jnp.ndarray:
         """Convert a vector of state indexes into a vector of state values
 
-        :param numpy.ndarray cidx: A 1-dimensional array of control indexes
+        :param jnp.ndarray cidx: A 1-dimensional array of control indexes
         :return: A 1-dimensional array of control values
-        :rval: numpy.ndarray
+        :rval: jnp.ndarray
         :raises IndexError: if a value in the state index is out of bounds in the state space
         """
         if unflatten :
-                cidx = numpy.unravel_index(cidx,self.controlShape)
-        return numpy.array(
-            self.CA[numpy.newaxis,:] + numpy.multiply(self.CB[numpy.newaxis,:],cidx),
+                cidx = jnp.unravel_index(cidx,self.controlShape)
+        return jnp.array(
+            self.CA[jnp.newaxis,:] + np.multiply(self.CB[jnp.newaxis,:],cidx),
             dtype=self.D_FLOAT
             ).reshape(-1,)
 
@@ -428,18 +429,18 @@ class optimizer :
     def controlV2I(self,cval,flatten=False) :
         """Convert a vector of control values into a vector of control indexes
 
-        :param numpy.ndarray sval: A 1-dimensional array of control values
+        :param jnp.ndarray sval: A 1-dimensional array of control values
         :return: a 1-dimensional array of control indexes
-        :rval: numpy.ndarray (float)
+        :rval: jnp.ndarray (float)
         """
-        cidx = numpy.around(
-            numpy.divide(numpy.array(cval) - self.CA,self.CB.transpose() ).astype(self.D_INT)
+        cidx = jnp.around(
+            jnp.divide(jnp.array(cval) - self.CA,self.CB.transpose() ).astype(self.D_INT)
             )
         #It is possible members of S are off grid. Replace them with
         #0 or the maximum index
-        numpy.clip(cidx,0,self.CGMaxIndex,out=cidx)
+        jnp.clip(cidx,0,self.CGMaxIndex,out=cidx)
         if flatten :
-            cidx = numpy.ravel_multi_index(cidx , self.controlShape)
+            cidx = jnp.ravel_multi_index(cidx , self.controlShape)
 
         return cidx
 
@@ -459,14 +460,17 @@ class optimizer :
             #If we defined exogenous variables, copy them to a matrix
             if self.KE > 0 :
                 #Init a matrix to hold exogenous values
-                self.exogenous = numpy.empty( (self.T,self.KE), dtype=self.D_FLOAT )
+                #Jax arrays are immutable. We'll construct a numpy array and then copy it
+                local_exogenous = np.empty( (self.T,self.KE), dtype=self.D_FLOAT )
                 #Add each exogenous variable to the matrix, broadcasting as needed
                 for i in range(0,self.KE) :
                     #Broadcast values into T
-                    self.exogenous[:,i] = numpy.resize(self.exogenousDetails['values'][i],(self.T,))
+                    local_exogenous[:,i] = np.resize(self.exogenousDetails['values'][i],(self.T,))
+                
+                self.exogenous = jnp.array(local_exogenous)
             #If no exogenous variables were defined, make the matrix a vector of zeros
             else :
-                self.exogenous = numpy.zeros( (self.T,1), dtype=self.D_FLOAT  )
+                self.exogenous = jnp.zeros( (self.T,1), dtype=self.D_FLOAT  )
                 #Set self.KE to one to simulate a single exogenous variable
                 self.KE = 1
 
@@ -486,20 +490,20 @@ class optimizer :
         """
         #Define a #state x #control array to hold single period profits for each possible
         #State-Control combination
-        self.profit_array = numpy.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
+        self.profit_array = jnp.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
 
         #Define a #state x #control array to hold single-period candidate values of the value function
         #There is one entry for each state-control combination
-        self.vfc = numpy.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
+        self.vfc = np.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
 
         #Define a #state x #(time periods + 1) array to hold the value function in each period
         #Initalize it to zero. Add an extra time period with zeros for no future continuation value
         #The extra time period holds the continuation value. Currently it is set to zero
-        self.VF = numpy.zeros(shape=(self.NS,self.T+1),dtype=self.D_FLOAT)
+        self.VF = np.zeros(shape=(self.NS,self.T+1),dtype=self.D_FLOAT)
 
         #Define a #states x #(time periods) to hold the unraveld index of the optimlal control indexes
         #in each period.
-        self.optimalControls = numpy.zeros( (self.NS,self.T) ,dtype=self.D_INT)
+        self.optimalControls = np.zeros( (self.NS,self.T) ,dtype=self.D_INT)
 
 
     ########################
@@ -514,10 +518,10 @@ class optimizer :
         self._initExogeneous()
 
         #Initialize a state transition index array. it is #state x #control array where each entry is a new raveled state index
-        self.state_transition_idx = numpy.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
+        self.state_transition_idx = jnp.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
 
         #Initialize a constraint mask. Each cell defalts to not violating a constraint (FALSE)
-        self.constraint_mask = numpy.full(fill_value=False,shape=(self.NS,self.NC),dtype=self.D_BOOL)
+        self.constraint_mask = jnp.full(fill_value=False,shape=(self.NS,self.NC),dtype=self.D_BOOL)
 
         self._initValueFunction()
 
@@ -544,10 +548,10 @@ class optimizer :
 
         #Compute candidate values of the period t value function for each combination of state and control
         #This is the current period payoff plus the discounted t+1 value function for the new state
-        self.vfc = self.profit_array + self.discount * self.VF[self.state_transition_idx,t+1]
+        self.vfc = np.array(self.profit_array + self.discount * self.VF[self.state_transition_idx,t+1])
 
         #Obtain the optimal control for each value of the state
-        self.optimalControls[:,t] = numpy.argmax(self.vfc, axis=1)
+        self.optimalControls[:,t] = jnp.argmax(self.vfc, axis=1)
 
         #Save the value function for each choice of optimal control
         idx = tuple([range(0,self.NS),self.optimalControls[:,t]])
@@ -576,15 +580,15 @@ class optimizer :
     #But maybe you want to extract the optimal path over time given an inital state.
     def get_optimal_path(self,sval_init) :
         """Compute the optimal path given an inital state
-        :param numpy.array sval_init: An array of initial state values
+        :param jnp.array sval_init: An array of initial state values
         :returns: A pandas data frame outlining the optimal path
         """
         #Create an array to hold the optimal values of c and the evolution of the state
         #You'll compute payoffs later
-        cPath = numpy.empty((self.T,self.KC),dtype=self.D_FLOAT)
-        sPath = numpy.empty((self.T,self.KS),dtype=self.D_FLOAT)
-        pvPath = numpy.empty((self.T,2),dtype=self.D_FLOAT)
-        tPath = numpy.array(range(0,self.T),dtype=self.D_INT).reshape(self.T,1)
+        cPath = np.empty((self.T,self.KC),dtype=self.D_FLOAT)
+        sPath = np.empty((self.T,self.KS),dtype=self.D_FLOAT)
+        pvPath = np.empty((self.T,2),dtype=self.D_FLOAT)
+        tPath = np.array(range(0,self.T),dtype=self.D_INT).reshape(self.T,1)
 
         #Create a list of column names for the output data frame
         colnames = ["period"] + self.stateDetails["name"] + self.controlDetails["name"] + self.exogenousDetails["name"] + ["payoff","valueFunction"]
@@ -597,10 +601,10 @@ class optimizer :
         for t in range(0,self.T) :
             #Look up the optimal control for the state index plus time vector.
             #This returns a raveled scalar pointing to an entry in the control space
-            cidx = self.optimalControls[ tuple(numpy.append(sidx,t)) ]
+            cidx = self.optimalControls[ tuple(jnp.append(sidx,t)) ]
 
             #Unravel ciu to get the indexes of the optimal control in the control space
-            #ci = numpy.unravel_index(ciu,self.controlShape)
+            #ci = jnp.unravel_index(ciu,self.controlShape)
 
             #Find the values of the control variables that correspond to the indexes in ci
             cval = self.controlI2V(cidx,unflatten=True)
@@ -619,7 +623,7 @@ class optimizer :
             cPath[t,:] = cval
             sPath[t,:] = sval
             pvPath[t,0] = p
-            pvPath[t,1] = self.VF[ tuple(numpy.append(sidx,t))]
+            pvPath[t,1] = self.VF[ tuple(jnp.append(sidx,t))]
 
             #Update the state
             self.state_transition(t)
@@ -631,7 +635,7 @@ class optimizer :
 
 
         df = pandas.DataFrame(
-            data = numpy.hstack( (tPath,sPath,cPath,self.exogenous,pvPath) ),
+            data = np.hstack( (tPath,sPath,cPath,self.exogenous,pvPath) ),
             columns = colnames
             )
         return df
@@ -653,23 +657,31 @@ class optimizer :
         if t == self.last_payoff_t :
             pass
         else :
+            local_profit_array = np.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
+
             #P*Q profit doesn't depend on the state. Update all of the entries
-            self.profit_array[:,0:self.NC] = self.exogenous[t,self.eidx["P"]]*self.controlValues[self.cidx["Q"]]
+            local_profit_array[:,0:self.NC] = self.exogenous[t,self.eidx["P"]]*self.controlValues[self.cidx["Q"]]
 
             #Choosing zero quantitiy results in zero profits
-            self.profit_array[ : , self.controlValues[self.cidx["Q"]] == 0 ] = 0
+            local_profit_array[ : , self.controlValues[self.cidx["Q"]] == 0 ] = 0
 
-            self.profit_array[self.constraint_mask] = self.param["Omega"]
+            local_profit_array[self.constraint_mask] = self.param["Omega"]
 
             #Add a continuation value in the final period
             #Here I'll make it net reserves times a constant
             if t == self.T - 1 :
                 #Create a matrix of continuation values for each state/control
-                self.continuation_value = numpy.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
-                self.continuation_value[:,0:self.NC] = self.controlValues[self.cidx["Q"]]
-                self.continuation_value[0:self.NS,:] = (self.stateValues[0:self.NS,self.sidx["R"]].reshape((self.NS,1)) - self.continuation_value[0:self.NS,:])*self.param["CV"]
-                self.profit_array = self.profit_array + self.continuation_value
+                local_continuation_value = np.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
+                local_continuation_value[:,0:self.NC] = self.controlValues[self.cidx["Q"]]
+                local_continuation_value[0:self.NS,:] = (self.stateValues[0:self.NS,self.sidx["R"]].reshape((self.NS,1)) - local_continuation_value[0:self.NS,:])*self.param["CV"]
+                local_profit_array = self.profit_array + local_continuation_value
+                self.continuation_value = jnp.array(local_continuation_value)
+            else :
+                self.continuation_value = jnp.zeros(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
             #return self.profit_array
+
+            
+            self.profit_array = jnp.array(local_profit_array)
 
             self.last_payoff_t = t
 
@@ -689,17 +701,17 @@ class optimizer :
             pass
         else :
             #Create a list of #state x #control arrays, defaulting to the current value of each state
-            new_state_vals = [ self.stateValues[:,idx,numpy.newaxis] * numpy.ones_like(self.controlValues) for idx in range(0,self.KS) ]
+            new_state_vals = [ self.stateValues[:,idx,jnp.newaxis] * jnp.ones_like(self.controlValues) for idx in range(0,self.KS) ]
 
             #Compute new reserves as previous reserves times gamme
-            new_state_vals[self.sidx["R"]] = self.stateValues[:,self.sidx["R"],numpy.newaxis]*self.param["gamma"] - \
-                                  numpy.where(self.controlValues[numpy.newaxis,self.cidx["Q"]], self.param["e"], 1) * self.controlValues[numpy.newaxis,self.cidx["Q"]]
+            new_state_vals[self.sidx["R"]] = self.stateValues[:,self.sidx["R"],jnp.newaxis]*self.param["gamma"] - \
+                                  jnp.where(self.controlValues[jnp.newaxis,self.cidx["Q"]], self.param["e"], 1) * self.controlValues[jnp.newaxis,self.cidx["Q"]]
 
             #Quantize each new_state_vals to the grid
             for s in range(0,self.KS) :
-                new_state_vals[s] = numpy.around((new_state_vals[s] - self.SA[s])/self.SB[s]).astype(numpy.int64)
+                new_state_vals[s] = jnp.around((new_state_vals[s] - self.SA[s])/self.SB[s]).astype(jnp.int64)
 
-            self.state_transition_idx = numpy.ravel_multi_index(new_state_vals,dims=self.stateShape,mode='clip')
+            self.state_transition_idx = jnp.ravel_multi_index(new_state_vals,dims=self.stateShape,mode='clip')
 
             self.last_state_transition_t = t
 
@@ -726,20 +738,22 @@ class optimizer :
             ## Constraint Masks
             ###########################
             ##Reserve constraints. These require knowledge of reserves in the next period. Compute it
-            reserve_value = numpy.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
+            reserve_value = np.empty(shape=(self.NS,self.NC),dtype=self.D_FLOAT)
             #Set each cell equal to the quantity produced (from the control)
-            reserve_value[:,0:self.NC] = self.controlValues[self.cidx["Q"]]*numpy.where(self.controlValues[self.cidx["Q"]] > 0,self.param["e"],1)
+            reserve_value[:,0:self.NC] = self.controlValues[self.cidx["Q"]]*np.where(self.controlValues[self.cidx["Q"]] > 0,self.param["e"],1)
 
-            reserve_value[0:self.NS,:] = self.stateValues[0:self.NS,self.sidx["R"],numpy.newaxis]*self.param["gamma"] - reserve_value
+            reserve_value[0:self.NS,:] = self.stateValues[0:self.NS,self.sidx["R"],np.newaxis]*self.param["gamma"] - reserve_value
 
             ###########
             ## Combine the constraint_mask with every constraint using logical ORs
             ###########
-            #Reset the constraint mas
-            self.constraint_mask[:,:] = False
+            #Reset the constraint mask
+            #self.constraint_mask = jnp.full_like(self.constraint_mask,False)
+            #self.constraint_mask[:,:] = False
             #Reserves cannot be less than zero
-            numpy.logical_or(self.constraint_mask, reserve_value < 0, out=self.constraint_mask)
+            #jnp.logical_or(self.constraint_mask, reserve_value < 0, out=self.constraint_mask)
             #Reserves cannot be more than RMax
-            numpy.logical_or(self.constraint_mask, reserve_value > self.param["RMax"], out=self.constraint_mask)
+            #jnp.logical_or(self.constraint_mask, reserve_value > self.param["RMax"], out=self.constraint_mask)
 
+            self.constraint_mask = jnp.logical_or(reserve_value < 0,reserve_value > self.param["RMax"])
             self.last_constraint_mask_t = t
