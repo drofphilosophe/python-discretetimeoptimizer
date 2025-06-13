@@ -267,14 +267,14 @@ class optimizer :
             #Only rebuild the state space if it's dirty
             if self.dirty_state == True :
                 #Define the "intercept" of the state transformer. It is the minimum vaulue of each state variable
-                self.SA = numpy.array(self.stateDetails['minValue']).astype(numpy.float64)
+                self.SA = numpy.array(self.stateDetails['minValue']).astype(self.D_FLOAT)
 
                 #Define the "slope" of each state transformer. It is the step size
-                self.SB = numpy.array(self.stateDetails['delta']).astype(numpy.float64)
+                self.SB = numpy.array(self.stateDetails['delta']).astype(self.D_FLOAT)
 
                 #Define an array with the maximum index of each state variable.
                 #We'll use this to keep state transitions on-grid
-                self.SGMaxIndex = numpy.array( self.stateDetails['numPoints'] ) - 1
+                self.SGMaxIndex = numpy.array( self.stateDetails['numPoints'] ).astype(self.D_INT) - 1
 
                 #Get a list containing the size of each dimension in the state space
                 self.stateShape = self.stateDetails['numPoints']
